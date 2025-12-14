@@ -11,7 +11,24 @@ export function formatSymbol(symbol: string): string {
 }
 
 export function toInternalSymbol(displaySymbol: string): string {
+    // Only convert for BitMEX style symbols (BTCUSD -> XBTUSD)
+    // Don't convert USDT pairs (BTCUSDT stays BTCUSDT)
+    if (displaySymbol.endsWith('USDT')) {
+        return displaySymbol;
+    }
     return displaySymbol.replace('BTC', 'XBT');
+}
+
+// Check if symbol is from Binance (USDT-margined)
+export function isBinanceSymbol(symbol: string): boolean {
+    return symbol.endsWith('USDT') && !symbol.startsWith('XBT');
+}
+
+// Check if contract is inverse (settled in BTC) - only BitMEX XBTUSD/ETHUSD
+export function isInverseContract(symbol: string): boolean {
+    return symbol === 'XBTUSD' || symbol === 'ETHUSD' || 
+           symbol === 'BTCUSD' || // Display symbol for XBTUSD
+           (symbol.startsWith('XBT') && !symbol.endsWith('USDT'));
 }
 
 // ============ Types ============
@@ -69,9 +86,9 @@ export interface Order {
 
 export interface WalletTransaction {
     transactID: string;
-    account: number;
+    account: number | string;  // number for BitMEX, string (symbol) for Binance
     currency: string;
-    transactType: 'RealisedPNL' | 'Funding' | 'Deposit' | 'Withdrawal' | 'UnrealisedPNL' | 'AffiliatePayout' | 'Transfer';
+    transactType: 'RealisedPNL' | 'Funding' | 'Deposit' | 'Withdrawal' | 'UnrealisedPNL' | 'AffiliatePayout' | 'Transfer' | 'Commission';
     amount: number;
     fee: number;
     transactStatus: string;

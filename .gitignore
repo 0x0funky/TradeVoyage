@@ -20,12 +20,17 @@ package-lock.json
 /coverage
 
 # ============ Data Files (需另外下載) ============
-# 交易數據 (根目錄)
+# BitMEX 交易數據 (根目錄)
 bitmex_executions.csv
 bitmex_trades.csv
 bitmex_orders.csv
 bitmex_wallet_history.csv
 bitmex_account_summary.json
+
+# Binance Futures 交易數據 (根目錄)
+binance_executions.csv
+binance_wallet_history.csv
+binance_account_summary.json
 
 # K 線數據 (data/ohlcv/)
 /data/ohlcv/*.csv

@@ -8,8 +8,10 @@ import {
     getEquityCurve,
     getFundingHistory,
     getPositionSessions,
-    toInternalSymbol
+    toInternalSymbol,
+    hasExchangeData,
 } from '@/lib/data_loader';
+import { ExchangeType } from '@/lib/exchange_types';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -20,36 +22,45 @@ export async function GET(request: Request) {
     const symbol = searchParams.get('symbol') || undefined;
     const timeframe = (searchParams.get('timeframe') || '1d') as '1h' | '4h' | '1d' | '1w';
     const sessionId = searchParams.get('sessionId');
+    const exchange = (searchParams.get('exchange') || 'bitmex') as ExchangeType;
 
     try {
+        // Check if exchange data exists
+        if (!hasExchangeData(exchange)) {
+            return NextResponse.json({
+                error: `No data found for ${exchange}. Please import data first.`,
+                noData: true,
+            }, { status: 404 });
+        }
+
         // Chart data
         if (chart === 'true') {
-            const { candles, markers } = getOHLCData(symbol, timeframe);
+            const { candles, markers } = getOHLCData(symbol, timeframe, exchange);
             return NextResponse.json({ candles, markers });
         }
 
         // Stats overview
         if (type === 'stats') {
-            const stats = calculateTradingStats();
-            const account = loadAccountSummary();
+            const stats = calculateTradingStats(exchange);
+            const account = loadAccountSummary(exchange);
             return NextResponse.json({ stats, account });
         }
 
         // Equity curve data
         if (type === 'equity') {
-            const equityCurve = getEquityCurve();
+            const equityCurve = getEquityCurve(exchange);
             return NextResponse.json({ equityCurve });
         }
 
         // Funding history
         if (type === 'funding') {
-            const fundingHistory = getFundingHistory();
+            const fundingHistory = getFundingHistory(exchange);
             return NextResponse.json({ fundingHistory });
         }
 
         // Position Sessions
         if (type === 'sessions') {
-            const allSessions = getPositionSessions();
+            const allSessions = getPositionSessions(exchange);
             
             let filteredSessions = allSessions;
             if (symbol) {
@@ -81,7 +92,7 @@ export async function GET(request: Request) {
 
         // Get specific session with full trade details
         if (sessionId) {
-            const allSessions = getPositionSessions();
+            const allSessions = getPositionSessions(exchange);
             const session = allSessions.find(s => s.id === sessionId);
             
             if (!session) {
@@ -92,7 +103,7 @@ export async function GET(request: Request) {
         }
 
         // Default: Trade list
-        const { trades, total } = getPaginatedTrades(page, limit, symbol);
+        const { trades, total } = getPaginatedTrades(page, limit, symbol, exchange);
         return NextResponse.json({ trades, total, page, limit });
 
     } catch (error) {

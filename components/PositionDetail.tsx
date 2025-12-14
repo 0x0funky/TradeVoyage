@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PositionSession, Trade, formatDuration } from '@/lib/types';
+import { PositionSession, formatDuration, isBinanceSymbol } from '@/lib/types';
 import {
     ArrowLeft,
     TrendingUp,
@@ -24,6 +24,13 @@ export function PositionDetail({ session, onBack }: PositionDetailProps) {
     const pnlPercent = session.avgEntryPrice > 0 && session.avgExitPrice > 0
         ? ((session.avgExitPrice - session.avgEntryPrice) / session.avgEntryPrice * 100)
         : 0;
+    
+    // Determine currency based on symbol
+    const isBinance = isBinanceSymbol(session.symbol);
+    const currency = isBinance ? 'USDT' : 'XBT';
+    const pnlDecimals = isBinance ? 2 : 6;
+    const feeDecimals = isBinance ? 4 : 8;
+    const sizeUnit = isBinance ? session.symbol.replace('USDT', '') : 'BTC';
 
     // Calculate running position for each trade
     let runningPosition = 0;
@@ -82,7 +89,7 @@ export function PositionDetail({ session, onBack }: PositionDetailProps) {
                             Net P&L
                         </div>
                         <div className={`text-2xl font-bold tracking-tight ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {isProfit ? '+' : ''}{session.netPnl.toFixed(6)} <span className="text-lg opacity-70">XBT</span>
+                            {isProfit ? '+' : ''}{session.netPnl.toFixed(pnlDecimals)} <span className="text-lg opacity-70">{currency}</span>
                         </div>
                         {session.status === 'closed' && (
                             <div className={`text-sm font-medium mt-1 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -118,10 +125,10 @@ export function PositionDetail({ session, onBack }: PositionDetailProps) {
                             Max Size
                         </div>
                         <div className="text-xl font-bold">
-                            {session.maxSize.toLocaleString()}
+                            {session.maxSize.toLocaleString()} {sizeUnit}
                         </div>
                         <div className="text-sm text-muted-foreground font-medium mt-1">
-                            ~${(session.maxSize / session.avgEntryPrice).toFixed(4)} BTC
+                            ~${(session.maxSize * session.avgEntryPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
                         </div>
                     </div>
                 </div>
@@ -151,7 +158,7 @@ export function PositionDetail({ session, onBack }: PositionDetailProps) {
                         <span className="text-sm font-bold uppercase tracking-wide">Total Fees Paid</span>
                     </div>
                     <span className="text-amber-600 dark:text-amber-400 font-mono font-bold">
-                        {session.totalFees.toFixed(8)} XBT
+                        {session.totalFees.toFixed(feeDecimals)} {currency}
                     </span>
                 </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { Trade, PositionSession } from '@/lib/types';
 import { TradeList } from './TradeList';
 import { PositionSessionList } from './PositionSessionList';
@@ -8,7 +9,7 @@ import { PositionDetail } from './PositionDetail';
 import { StatsOverview } from './StatsOverview';
 import { MonthlyPnLChart } from './MonthlyPnLChart';
 import { EquityCurve } from './EquityCurve';
-import { TVChart } from './TVChart';
+import TradingViewChart from './TradingViewChart';
 import {
     Loader2,
     ChevronLeft,
@@ -16,201 +17,139 @@ import {
     LayoutList,
     History,
     BarChart3,
-    LineChart,
     TrendingUp,
-    Activity
+    Activity,
+    Settings,
+    Database,
+    Sun,
+    Moon,
+    Github,
 } from 'lucide-react';
+import { ExchangeType, EXCHANGE_DISPLAY_NAMES } from '@/lib/exchange_types';
+import { useTheme } from './ThemeProvider';
 
 type ViewMode = 'overview' | 'positions' | 'trades';
 
 export function Dashboard() {
+    const { theme, toggleTheme } = useTheme();
     const [trades, setTrades] = useState<Trade[]>([]);
     const [sessions, setSessions] = useState<PositionSession[]>([]);
-    const [chartData, setChartData] = useState<{ candles: any[], markers: any[] }>({ candles: [], markers: [] });
-    const [chartLoading, setChartLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     const [account, setAccount] = useState<any>(null);
     const [equityCurve, setEquityCurve] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('bitmex');
     const [selectedSymbol, setSelectedSymbol] = useState('BTCUSD');
-    const [timeframe, setTimeframe] = useState<string>('1d');
     const [viewMode, setViewMode] = useState<ViewMode>('overview');
-    const [allTrades, setAllTrades] = useState<Trade[]>([]); // All trades for markers
     const [selectedSession, setSelectedSession] = useState<PositionSession | null>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const limit = 20;
 
-    // Helper function to align time to timeframe bucket
-    const alignToTimeframe = (timestamp: number, tf: string): number => {
-        const date = new Date(timestamp * 1000);
-        
-        switch (tf) {
-            case '1m':
-                date.setSeconds(0, 0);
-                break;
-            case '5m':
-                date.setMinutes(Math.floor(date.getMinutes() / 5) * 5, 0, 0);
-                break;
-            case '15m':
-                date.setMinutes(Math.floor(date.getMinutes() / 15) * 15, 0, 0);
-                break;
-            case '30m':
-                date.setMinutes(Math.floor(date.getMinutes() / 30) * 30, 0, 0);
-                break;
-            case '1h':
-                date.setMinutes(0, 0, 0);
-                break;
-            case '4h':
-                date.setHours(Math.floor(date.getHours() / 4) * 4, 0, 0, 0);
-                break;
-            case '1d':
-                date.setHours(0, 0, 0, 0);
-                break;
-            case '1w':
-                const day = date.getDay();
-                const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-                date.setDate(diff);
-                date.setHours(0, 0, 0, 0);
-                break;
-        }
-        
-        return Math.floor(date.getTime() / 1000);
-    };
+    // State for all sessions (loaded upfront for chart markers)
+    const [allSessions, setAllSessions] = useState<PositionSession[]>([]);
 
-    // Generate chart markers from trades or selected session
-    const chartMarkers = useMemo(() => {
-        // Use session trades if a session is selected, otherwise use all trades
-        const tradesToMark = selectedSession ? selectedSession.trades : allTrades;
-        
-        if (!tradesToMark || tradesToMark.length === 0 || chartData.candles.length === 0) {
-            return [];
-        }
+    // Collect Entry & Exit points from ALL sessions for the TradingView chart
+    // Only show entry price and exit price, not all individual trades
+    const allSessionTrades = useMemo(() => {
+        if (!allSessions || allSessions.length === 0) return [];
 
-        // Get the visible chart time range (avoid spread operator for large arrays)
-        let minTime = Infinity;
-        let maxTime = -Infinity;
-        for (const candle of chartData.candles) {
-            if (candle.time < minTime) minTime = candle.time;
-            if (candle.time > maxTime) maxTime = candle.time;
-        }
+        const trades: { datetime: string; side: 'buy' | 'sell'; price: number; amount: number; sessionId: string; label: string }[] = [];
 
-        // Group trades by timeframe bucket and aggregate
-        const bucketMap = new Map<string, { buys: number; sells: number; buyQty: number; sellQty: number; avgBuyPrice: number; avgSellPrice: number }>();
-        
-        tradesToMark.forEach(trade => {
-            const tradeTime = Math.floor(new Date(trade.datetime).getTime() / 1000);
-            
-            // Skip trades outside the visible range
-            if (tradeTime < minTime || tradeTime > maxTime) {
-                return;
-            }
-            
-            const bucketTime = alignToTimeframe(tradeTime, timeframe);
-            const key = `${bucketTime}-${trade.side}`;
-            
-            if (!bucketMap.has(key)) {
-                bucketMap.set(key, { buys: 0, sells: 0, buyQty: 0, sellQty: 0, avgBuyPrice: 0, avgSellPrice: 0 });
-            }
-            
-            const bucket = bucketMap.get(key)!;
-            if (trade.side === 'buy') {
-                bucket.buyQty += trade.amount;
-                bucket.avgBuyPrice = (bucket.avgBuyPrice * bucket.buys + trade.price) / (bucket.buys + 1);
-                bucket.buys++;
-            } else {
-                bucket.sellQty += trade.amount;
-                bucket.avgSellPrice = (bucket.avgSellPrice * bucket.sells + trade.price) / (bucket.sells + 1);
-                bucket.sells++;
-            }
-        });
-
-        // Create sorted array of candle times for binary search
-        const sortedCandleTimes = chartData.candles.map(c => c.time).sort((a, b) => a - b);
-        const candleTimeSet = new Set(sortedCandleTimes);
-        
-        // Binary search to find closest candle time
-        const findClosestCandleTime = (time: number): number | null => {
-            if (candleTimeSet.has(time)) return time;
-            if (sortedCandleTimes.length === 0) return null;
-            
-            // Binary search for insertion point
-            let left = 0;
-            let right = sortedCandleTimes.length - 1;
-            
-            while (left < right) {
-                const mid = Math.floor((left + right) / 2);
-                if (sortedCandleTimes[mid] < time) {
-                    left = mid + 1;
-                } else {
-                    right = mid;
-                }
-            }
-            
-            // Check closest between left and left-1
-            const timeframeSeconds: Record<string, number> = {
-                '1m': 60, '5m': 300, '15m': 900, '30m': 1800,
-                '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800,
-            };
-            const window = timeframeSeconds[timeframe] || 3600;
-            
-            let closest: number | null = null;
-            let minDiff = Infinity;
-            
-            // Check the found index and one before
-            for (const idx of [left - 1, left, left + 1]) {
-                if (idx >= 0 && idx < sortedCandleTimes.length) {
-                    const diff = Math.abs(sortedCandleTimes[idx] - time);
-                    if (diff < minDiff && diff <= window) {
-                        minDiff = diff;
-                        closest = sortedCandleTimes[idx];
-                    }
-                }
-            }
-            
-            return closest;
+        // Normalize symbol for comparison (handle XBT/BTC aliasing)
+        const normalizeSymbol = (sym: string): string => {
+            return sym.toUpperCase()
+                .replace('XBT', 'BTC')  // BitMEX uses XBT for BTC
+                .replace('USD', '')
+                .replace('USDT', '')
+                .replace('/', '')
+                .replace(':BTC', '');
         };
 
-        // Generate markers
-        const markers: any[] = [];
-        bucketMap.forEach((bucket, key) => {
-            const [timeStr, side] = key.split('-');
-            const rawTime = parseInt(timeStr);
-            
-            // Find the closest matching candle time
-            const time = findClosestCandleTime(rawTime);
-            if (time === null) return;
-            
-            if (side === 'buy' && bucket.buys > 0) {
-                markers.push({
-                    time,
-                    position: 'belowBar',
-                    color: '#10b981',
-                    shape: 'arrowUp',
-                    text: `BUY ${bucket.buyQty.toLocaleString()} @ $${bucket.avgBuyPrice.toLocaleString(undefined, { maximumFractionDigits: 1 })}`
+        const baseNormalized = normalizeSymbol(selectedSymbol);
+
+        allSessions.forEach(session => {
+            // Match symbol using normalized comparison
+            const sessionNormalized = normalizeSymbol(session.symbol);
+            if (sessionNormalized !== baseNormalized) {
+                return;
+            }
+
+            // Only show entry and exit, not all trades
+            if (session.avgEntryPrice > 0) {
+                trades.push({
+                    datetime: session.openTime,
+                    side: session.side === 'long' ? 'buy' : 'sell',
+                    price: session.avgEntryPrice,
+                    amount: session.maxSize,
+                    sessionId: session.id,
+                    label: `${session.side.toUpperCase()} ENTRY`,
                 });
             }
-            if (side === 'sell' && bucket.sells > 0) {
-                markers.push({
-                    time,
-                    position: 'aboveBar',
-                    color: '#ef4444',
-                    shape: 'arrowDown',
-                    text: `SELL ${bucket.sellQty.toLocaleString()} @ $${bucket.avgSellPrice.toLocaleString(undefined, { maximumFractionDigits: 1 })}`
+
+            if (session.status === 'closed' && session.avgExitPrice > 0 && session.closeTime) {
+                trades.push({
+                    datetime: session.closeTime,
+                    side: session.side === 'long' ? 'sell' : 'buy',
+                    price: session.avgExitPrice,
+                    amount: session.maxSize,
+                    sessionId: session.id,
+                    label: `${session.side.toUpperCase()} EXIT`,
                 });
             }
         });
 
-        // Sort by time
-        return markers.sort((a, b) => a.time - b.time);
-    }, [selectedSession, allTrades, timeframe, chartData.candles]);
+        // Sort by datetime
+        trades.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
+        console.log(`[allSessionTrades] Symbol: ${selectedSymbol}, Normalized: ${baseNormalized}, Found ${trades.length} trades from ${allSessions.length} sessions`);
+        return trades;
+    }, [allSessions, selectedSymbol]);
+
+    // Get entry & exit for selected session only
+    const selectedSessionTrades = useMemo(() => {
+        if (!selectedSession) return [];
+
+        const trades: { datetime: string; side: 'buy' | 'sell'; price: number; amount: number; label: string }[] = [];
+
+        if (selectedSession.avgEntryPrice > 0) {
+            trades.push({
+                datetime: selectedSession.openTime,
+                side: selectedSession.side === 'long' ? 'buy' : 'sell',
+                price: selectedSession.avgEntryPrice,
+                amount: selectedSession.maxSize,
+                label: `ENTRY @ ${selectedSession.avgEntryPrice.toLocaleString()}`,
+            });
+        }
+
+        if (selectedSession.status === 'closed' && selectedSession.avgExitPrice > 0 && selectedSession.closeTime) {
+            trades.push({
+                datetime: selectedSession.closeTime,
+                side: selectedSession.side === 'long' ? 'sell' : 'buy',
+                price: selectedSession.avgExitPrice,
+                amount: selectedSession.maxSize,
+                label: `EXIT @ ${selectedSession.avgExitPrice.toLocaleString()}`,
+            });
+        }
+
+        return trades;
+    }, [selectedSession]);
+
+    // Symbol options based on exchange
+    const symbolOptions = selectedExchange === 'bitmex'
+        ? ['BTCUSD', 'ETHUSD']
+        : ['BTCUSDT', 'ETHUSDT'];
+
+    // Reset symbol when exchange changes
+    useEffect(() => {
+        setSelectedSymbol(selectedExchange === 'bitmex' ? 'BTCUSD' : 'BTCUSDT');
+    }, [selectedExchange]);
 
     // Load Stats and Account Data
     useEffect(() => {
         async function loadStats() {
             try {
-                const res = await fetch('/api/trades?type=stats');
+                const res = await fetch(`/api/trades?type=stats&exchange=${selectedExchange}`);
                 if (!res.ok) throw new Error('Failed to fetch stats');
                 const data = await res.json();
                 setStats(data.stats);
@@ -220,13 +159,13 @@ export function Dashboard() {
             }
         }
         loadStats();
-    }, []);
+    }, [selectedExchange]);
 
     // Load Equity Curve
     useEffect(() => {
         async function loadEquity() {
             try {
-                const res = await fetch('/api/trades?type=equity');
+                const res = await fetch(`/api/trades?type=equity&exchange=${selectedExchange}`);
                 if (!res.ok) throw new Error('Failed to fetch equity');
                 const data = await res.json();
                 setEquityCurve(data.equityCurve);
@@ -235,68 +174,24 @@ export function Dashboard() {
             }
         }
         loadEquity();
-    }, []);
+    }, [selectedExchange]);
 
-    // Load all trades for markers (once per symbol)
+
+    // Load all sessions upfront for chart markers
     useEffect(() => {
-        async function loadAllTrades() {
+        async function loadAllSessions() {
             try {
-                // Fetch all trades for this symbol (for markers)
-                const res = await fetch(`/api/trades?symbol=${encodeURIComponent(selectedSymbol)}&limit=10000`);
-                if (!res.ok) throw new Error('Failed to fetch trades');
+                // Fetch all sessions for this exchange without pagination
+                const res = await fetch(`/api/trades?type=sessions&limit=10000&exchange=${selectedExchange}`);
+                if (!res.ok) throw new Error('Failed to fetch sessions');
                 const data = await res.json();
-                setAllTrades(data.trades || []);
+                setAllSessions(data.sessions || []);
             } catch (err) {
-                console.error('Error loading trades for markers:', err);
+                console.error('Error loading sessions for markers:', err);
             }
         }
-        loadAllTrades();
-    }, [selectedSymbol]);
-
-    // Calculate visible range for chart when a session is selected
-    const selectedSessionRange = useMemo(() => {
-        if (!selectedSession) return null;
-        
-        const sessionStart = Math.floor(new Date(selectedSession.openTime).getTime() / 1000);
-        const sessionEnd = selectedSession.closeTime 
-            ? Math.floor(new Date(selectedSession.closeTime).getTime() / 1000)
-            : Math.floor(Date.now() / 1000); // Use current time for open positions
-        const sessionDuration = sessionEnd - sessionStart;
-        
-        // Add padding based on timeframe
-        const paddingMultiplier: Record<string, number> = {
-            '1m': 0.3, '5m': 0.5, '15m': 1, '30m': 2,
-            '1h': 3, '4h': 5, '1d': 10, '1w': 20,
-        };
-        const padding = Math.max(sessionDuration * (paddingMultiplier[timeframe] || 1), 3600 * 6); // At least 6 hours padding
-        
-        return {
-            from: sessionStart - padding,
-            to: sessionEnd + padding,
-        };
-    }, [selectedSession, timeframe]);
-
-    // Load Real OHLCV Chart Data from local files (load ALL data)
-    useEffect(() => {
-        async function loadChartData() {
-            setChartLoading(true);
-            try {
-                // Load all data without time range filter
-                const url = `/api/ohlcv?symbol=${encodeURIComponent(selectedSymbol)}&timeframe=${timeframe}`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('Failed to fetch OHLCV data');
-                const data = await res.json();
-                console.log(`Loaded ${data.candles?.length || 0} candles for ${selectedSymbol} ${timeframe}`);
-                setChartData({ candles: data.candles || [], markers: [] });
-            } catch (err) {
-                console.error('Error loading OHLCV:', err);
-                setChartData({ candles: [], markers: [] });
-            } finally {
-                setChartLoading(false);
-            }
-        }
-        loadChartData();
-    }, [selectedSymbol, timeframe]);
+        loadAllSessions();
+    }, [selectedExchange]);
 
     // Load Table Data (Paginated)
     useEffect(() => {
@@ -309,7 +204,7 @@ export function Dashboard() {
             try {
                 setLoading(true);
                 const typeParam = viewMode === 'positions' ? '&type=sessions' : '';
-                const res = await fetch(`/api/trades?page=${page}&limit=${limit}&symbol=${encodeURIComponent(selectedSymbol)}${typeParam}`);
+                const res = await fetch(`/api/trades?page=${page}&limit=${limit}&symbol=${encodeURIComponent(selectedSymbol)}${typeParam}&exchange=${selectedExchange}`);
                 if (!res.ok) throw new Error('Failed to fetch data');
                 const data = await res.json();
 
@@ -327,7 +222,7 @@ export function Dashboard() {
             }
         }
         loadData();
-    }, [page, selectedSymbol, viewMode]);
+    }, [page, selectedSymbol, viewMode, selectedExchange]);
 
     // Reset selected session when switching views or symbols
     useEffect(() => {
@@ -337,12 +232,13 @@ export function Dashboard() {
     // Handler to select a session and fetch full trade details
     const handleSelectSession = async (session: PositionSession) => {
         try {
-            const res = await fetch(`/api/trades?sessionId=${encodeURIComponent(session.id)}`);
+            const res = await fetch(`/api/trades?sessionId=${encodeURIComponent(session.id)}&exchange=${selectedExchange}`);
             if (!res.ok) throw new Error('Failed to fetch session details');
             const data = await res.json();
             setSelectedSession(data.session);
         } catch (err) {
             console.error('Error fetching session:', err);
+            // Fallback: use the session data we already have
             setSelectedSession(session);
         }
     };
@@ -370,21 +266,58 @@ export function Dashboard() {
                 {/* Header */}
                 <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-border">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-                            BitMEX Analytics
+                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                            TradeVoyage
                         </h1>
-                        <p className="text-muted-foreground mt-1 font-medium">
-                            {account?.user?.username ? `@${account.user.username}` : 'Portfolio'} • 2020-05-01 to Present
-                        </p>
+                        {/* Social Links */}
+                        <div className="flex items-center gap-2 mt-2">
+                            <a
+                                href="#"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                title="GitHub"
+                            >
+                                <Github className="w-4 h-4" />
+                            </a>
+                            <a
+                                href="#"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                                title="X (Twitter)"
+                            >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                </svg>
+                            </a>
+                        </div>
                     </div>
                     <div className="flex items-center gap-4 flex-wrap">
+                        {/* Exchange Selector */}
+                        <div className="relative">
+                            <select
+                                value={selectedExchange}
+                                onChange={(e) => {
+                                    setSelectedExchange(e.target.value as ExchangeType);
+                                    setPage(1);
+                                }}
+                                className="appearance-none pl-10 pr-10 py-2.5 bg-background border border-border rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-secondary cursor-pointer [&>option]:bg-background [&>option]:text-foreground"
+                            >
+                                <option value="bitmex">BitMEX</option>
+                                <option value="binance">Binance</option>
+                            </select>
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground">
+                                <Database className="w-4 h-4" />
+                            </div>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-muted-foreground">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+
                         {/* View Mode Tabs */}
-                        <div className="flex bg-secondary/30 backdrop-blur-sm rounded-xl p-1 border border-white/5">
+                        <div className="flex bg-secondary backdrop-blur-sm rounded-xl p-1 border border-border">
                             <button
                                 onClick={() => { setViewMode('overview'); setPage(1); }}
                                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${viewMode === 'overview'
-                                        ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                                    ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                                     }`}
                             >
                                 <BarChart3 size={16} className="mr-2" /> Overview
@@ -392,8 +325,8 @@ export function Dashboard() {
                             <button
                                 onClick={() => { setViewMode('positions'); setPage(1); }}
                                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${viewMode === 'positions'
-                                        ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                                    ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                                     }`}
                             >
                                 <History size={16} className="mr-2" /> Positions
@@ -401,8 +334,8 @@ export function Dashboard() {
                             <button
                                 onClick={() => { setViewMode('trades'); setPage(1); }}
                                 className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${viewMode === 'trades'
-                                        ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                                    ? 'bg-primary/10 text-primary shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-primary/20'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                                     }`}
                             >
                                 <LayoutList size={16} className="mr-2" /> Trades
@@ -417,22 +350,76 @@ export function Dashboard() {
                                     setSelectedSymbol(e.target.value);
                                     setPage(1);
                                 }}
-                                className="appearance-none pl-4 pr-10 py-2.5 bg-secondary/30 border border-white/5 rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-secondary/50 cursor-pointer"
+                                className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-secondary cursor-pointer [&>option]:bg-background [&>option]:text-foreground"
                             >
-                                <option value="BTCUSD">BTCUSD</option>
-                                <option value="ETHUSD">ETHUSD</option>
+                                {symbolOptions.map(sym => (
+                                    <option key={sym} value={sym}>{sym}</option>
+                                ))}
                             </select>
                             <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-muted-foreground">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                             </div>
                         </div>
+
+                        {/* Theme Toggle */}
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2.5 rounded-xl bg-secondary border border-border hover:bg-secondary/80 transition-all"
+                            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                        >
+                            {theme === 'dark' ? (
+                                <Sun className="w-5 h-5 text-amber-400" />
+                            ) : (
+                                <Moon className="w-5 h-5 text-indigo-500" />
+                            )}
+                        </button>
+
+                        {/* Settings Link */}
+                        <Link
+                            href="/settings"
+                            className="p-2.5 rounded-xl bg-secondary border border-border hover:bg-secondary/80 transition-all"
+                            title="Import Data"
+                        >
+                            <Settings className="w-5 h-5" />
+                        </Link>
                     </div>
                 </header>
+
+                {/* Exchange Section Title */}
+                <div className="flex items-center gap-3">
+                    {/* Exchange Icon */}
+                    {selectedExchange === 'bitmex' ? (
+                        <div className="w-10 h-10 rounded-xl bg-[#f7941d]/10 flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+                                <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#f7941d" />
+                                <path d="M2 17L12 22L22 17" stroke="#f7941d" strokeWidth="2" />
+                                <path d="M2 12L12 17L22 12" stroke="#f7941d" strokeWidth="2" />
+                            </svg>
+                        </div>
+                    ) : (
+                        <div className="w-10 h-10 rounded-xl bg-[#f0b90b]/10 flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="#f0b90b">
+                                <path d="M12 2L6 8.5L8.5 11L12 7.5L15.5 11L18 8.5L12 2Z" />
+                                <path d="M3 12L5.5 9.5L8 12L5.5 14.5L3 12Z" />
+                                <path d="M21 12L18.5 9.5L16 12L18.5 14.5L21 12Z" />
+                                <path d="M12 16.5L8.5 13L6 15.5L12 22L18 15.5L15.5 13L12 16.5Z" />
+                                <path d="M12 9.5L9.5 12L12 14.5L14.5 12L12 9.5Z" />
+                            </svg>
+                        </div>
+                    )}
+                    <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                        {EXCHANGE_DISPLAY_NAMES[selectedExchange]}
+                        <span className="text-muted-foreground font-normal">•</span>
+                        <span className="text-muted-foreground font-normal">
+                            {account?.user?.username ? `@${account.user.username}` : 'Portfolio Analytics'}
+                        </span>
+                    </h2>
+                </div>
 
                 {/* Overview Mode */}
                 {viewMode === 'overview' && stats && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <StatsOverview stats={stats} account={account} />
+                        <StatsOverview stats={stats} account={account} exchange={selectedExchange} />
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="glass rounded-xl p-6 hover-card">
@@ -440,14 +427,14 @@ export function Dashboard() {
                                     <TrendingUp className="w-5 h-5 text-primary" />
                                     Equity Curve
                                 </h3>
-                                <EquityCurve data={equityCurve} />
+                                <EquityCurve data={equityCurve} exchange={selectedExchange} />
                             </div>
                             <div className="glass rounded-xl p-6 hover-card">
                                 <h3 className="text-lg font-semibold mb-6 flex items-center gap-2 text-foreground">
                                     <BarChart3 className="w-5 h-5 text-primary" />
                                     Monthly PnL
                                 </h3>
-                                <MonthlyPnLChart data={stats.monthlyPnl} />
+                                <MonthlyPnLChart data={stats.monthlyPnl} exchange={selectedExchange} />
                             </div>
                         </div>
 
@@ -458,22 +445,14 @@ export function Dashboard() {
                                     <Activity className="w-5 h-5 text-primary" />
                                     Price Action <span className="text-muted-foreground text-sm font-normal ml-2">{selectedSymbol.split(':')[0]}</span>
                                 </h3>
-                                <div className="flex bg-secondary/30 rounded-lg p-1 border border-white/5 overflow-x-auto">
-                                    {(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] as const).map((tf) => (
-                                        <button
-                                            key={tf}
-                                            onClick={() => setTimeframe(tf)}
-                                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap ${timeframe === tf
-                                                    ? 'bg-primary/10 text-primary shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                                                }`}
-                                        >
-                                            {tf.toUpperCase()}
-                                        </button>
-                                    ))}
-                                </div>
                             </div>
-                            <TVChart data={chartData.candles} markers={chartMarkers} loading={chartLoading} visibleRange={null} />
+
+                            {/* Chart */}
+                            <TradingViewChart
+                                symbol={selectedSymbol.replace('/', '').replace(':BTC', '')}
+                                trades={allSessionTrades}
+                                height={450}
+                            />
                         </div>
                     </div>
                 )}
@@ -500,22 +479,22 @@ export function Dashboard() {
                                         {selectedSymbol.split(':')[0]} Chart
                                     </h3>
                                 )}
-                                <div className="flex bg-secondary/30 rounded-lg p-1 border border-white/5 overflow-x-auto">
-                                    {(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'] as const).map((tf) => (
-                                        <button
-                                            key={tf}
-                                            onClick={() => setTimeframe(tf)}
-                                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all whitespace-nowrap ${timeframe === tf
-                                                    ? 'bg-primary/10 text-primary shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                                                }`}
-                                        >
-                                            {tf.toUpperCase()}
-                                        </button>
-                                    ))}
-                                </div>
                             </div>
-                            <TVChart data={chartData.candles} markers={chartMarkers} loading={chartLoading} visibleRange={selectedSessionRange} />
+
+                            {/* Chart */}
+                            <TradingViewChart
+                                symbol={selectedSymbol.replace('/', '').replace(':BTC', '')}
+                                trades={selectedSession ? selectedSessionTrades : allSessionTrades}
+                                focusTime={selectedSession ? (() => {
+                                    // Calculate middle point between entry and exit for centering
+                                    const entryTime = new Date(selectedSession.openTime).getTime();
+                                    const exitTime = selectedSession.closeTime
+                                        ? new Date(selectedSession.closeTime).getTime()
+                                        : Date.now(); // Use current time for open positions
+                                    return Math.floor((entryTime + exitTime) / 2);
+                                })() : undefined}
+                                height={450}
+                            />
                         </section>
 
                         {/* Data Section */}

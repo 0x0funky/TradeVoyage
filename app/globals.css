@@ -23,31 +23,29 @@
   --radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #030712;
-    /* Richer dark background */
-    --foreground: #f8fafc;
-    --card: #111827;
-    /* Gray 900 */
-    --card-foreground: #f8fafc;
-    --popover: #111827;
-    --popover-foreground: #f8fafc;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #1f2937;
-    --secondary-foreground: #f8fafc;
-    --muted: #1f2937;
-    --muted-foreground: #94a3b8;
-    --accent: #1f2937;
-    --accent-foreground: #f8fafc;
-    --destructive: #7f1d1d;
-    --destructive-foreground: #f8fafc;
-    --border: #1f2937;
-    --input: #1f2937;
-    --ring: #1d4ed8;
-  }
+/* Dark mode - class-based for manual toggle */
+.dark {
+  --background: #030712;
+  --foreground: #f8fafc;
+  --card: #111827;
+  --card-foreground: #f8fafc;
+  --popover: #111827;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1f2937;
+  --secondary-foreground: #f8fafc;
+  --muted: #1f2937;
+  --muted-foreground: #94a3b8;
+  --accent: #1f2937;
+  --accent-foreground: #f8fafc;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #f8fafc;
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #1d4ed8;
 }
+
 
 body {
   color: var(--foreground);
@@ -79,15 +77,17 @@ body {
 
 /* Glassmorphism Utilities */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.1);
 }
 
 .dark .glass {
   background: rgba(17, 24, 39, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.3);
 }
 
 /* Premium Card Hover */
@@ -97,10 +97,39 @@ body {
 
 .hover-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
 }
 
 .dark .hover-card:hover {
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   border-color: var(--primary);
+}
+
+/* Light mode specific overrides - account card */
+.light-card-gradient {
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+}
+
+/* Text colors for gradient cards that work in both modes */
+.gradient-card-text {
+  color: white;
+}
+
+/* Native select dropdown styling */
+select {
+  color-scheme: light;
+}
+
+.dark select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.dark select option {
+  background-color: #1f2937;
+  color: #f8fafc;
 }

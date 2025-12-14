@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { PositionSession, formatDuration } from '@/lib/types';
-import { TrendingUp, TrendingDown, Clock, BarChart3, Eye, ArrowRight } from 'lucide-react';
+import { PositionSession, formatDuration, isBinanceSymbol } from '@/lib/types';
+import { TrendingUp, TrendingDown, Clock, BarChart3, ArrowRight } from 'lucide-react';
 
 interface PositionSessionListProps {
     sessions: PositionSession[];
@@ -62,14 +62,23 @@ export function PositionSessionList({ sessions, onSelectSession }: PositionSessi
 
                                 {/* PnL Display */}
                                 <div className="text-right">
-                                    <div className={`text-xl font-bold tracking-tight ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                        {isProfit ? '+' : ''}{session.netPnl.toFixed(6)} <span className="text-sm opacity-70">XBT</span>
-                                    </div>
-                                    {session.status === 'closed' && (
-                                        <div className={`text-xs font-medium ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
-                                        </div>
-                                    )}
+                                    {(() => {
+                                        const isBinance = isBinanceSymbol(session.symbol);
+                                        const currency = isBinance ? 'USDT' : 'XBT';
+                                        const decimals = isBinance ? 2 : 6;
+                                        return (
+                                            <>
+                                                <div className={`text-xl font-bold tracking-tight ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                    {isProfit ? '+' : ''}{session.netPnl.toFixed(decimals)} <span className="text-sm opacity-70">{currency}</span>
+                                                </div>
+                                                {session.status === 'closed' && (
+                                                    <div className={`text-xs font-medium ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                        {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

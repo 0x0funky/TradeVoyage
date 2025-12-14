@@ -3,11 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
 
-// Map display symbols to BitMEX symbols
+// Map display symbols to OHLCV file symbols
+// Use XBTUSD data for BTC, ETHUSD for ETH (including Binance symbols)
 const SYMBOL_MAP: Record<string, string> = {
     'BTCUSD': 'XBTUSD',
     'ETHUSD': 'ETHUSD',
     'XBTUSD': 'XBTUSD',
+    // Binance symbols -> use same OHLCV data
+    'BTCUSDT': 'XBTUSD',
+    'ETHUSDT': 'ETHUSD',
 };
 
 // Timeframe in minutes

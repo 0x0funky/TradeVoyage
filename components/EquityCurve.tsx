@@ -10,11 +10,13 @@ interface EquityData {
 
 interface EquityCurveProps {
     data: EquityData[];
+    exchange?: 'bitmex' | 'binance';
 }
 
-export function EquityCurve({ data }: EquityCurveProps) {
+export function EquityCurve({ data, exchange = 'bitmex' }: EquityCurveProps) {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
+    const currencyUnit = exchange === 'binance' ? 'USDT' : 'BTC';
 
     useEffect(() => {
         if (!chartContainerRef.current || data.length === 0) return;
@@ -49,7 +51,7 @@ export function EquityCurve({ data }: EquityCurveProps) {
             lineWidth: 2,
             priceFormat: {
                 type: 'custom',
-                formatter: (price: number) => price.toFixed(4) + ' BTC',
+                formatter: (price: number) => price.toFixed(4) + ' ' + currencyUnit,
             },
         });
 
@@ -100,7 +102,7 @@ export function EquityCurve({ data }: EquityCurveProps) {
                 </div>
                 <div className="text-right">
                     <p className="text-xl font-bold tracking-tight">
-                        {endBalance.toFixed(4)} BTC
+                        {endBalance.toFixed(4)} {currencyUnit}
                     </p>
                     <p className={`text-sm font-medium ${change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                         {change >= 0 ? '+' : ''}{change.toFixed(4)} ({changePercent.toFixed(1)}%)
@@ -113,11 +115,11 @@ export function EquityCurve({ data }: EquityCurveProps) {
             <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border/50">
                 <div className="text-center">
                     <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-medium">Starting Balance</p>
-                    <p className="font-bold">{startBalance.toFixed(4)} BTC</p>
+                    <p className="font-bold">{startBalance.toFixed(4)} {currencyUnit}</p>
                 </div>
                 <div className="text-center">
                     <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-medium">Peak Balance</p>
-                    <p className="font-bold text-emerald-500">{peak.toFixed(4)} BTC</p>
+                    <p className="font-bold text-emerald-500">{peak.toFixed(4)} {currencyUnit}</p>
                 </div>
                 <div className="text-center">
                     <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-medium">Max Drawdown</p>

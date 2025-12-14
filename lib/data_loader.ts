@@ -13,33 +13,85 @@ import {
     formatSymbol,
     toInternalSymbol
 } from './types';
+import { ExchangeType } from './exchange_types';
 
 // Re-export types and utilities for convenience
 export * from './types';
 
-// ============ Cache ============
+// ============ Exchange File Prefixes ============
 
-let cachedExecutions: Execution[] | null = null;
-let cachedTrades: Trade[] | null = null;
-let cachedOrders: Order[] | null = null;
-let cachedWallet: WalletTransaction[] | null = null;
-let cachedAccountSummary: AccountSummary | null = null;
-let cachedSessions: PositionSession[] | null = null;
+function getFilePrefix(exchange: ExchangeType): string {
+    return exchange === 'binance' ? 'binance_' : 'bitmex_';
+}
+
+// ============ Cache (per exchange) ============
+
+const cacheStore: Record<ExchangeType, {
+    executions: Execution[] | null;
+    trades: Trade[] | null;
+    orders: Order[] | null;
+    wallet: WalletTransaction[] | null;
+    accountSummary: AccountSummary | null;
+    sessions: PositionSession[] | null;
+}> = {
+    bitmex: {
+        executions: null,
+        trades: null,
+        orders: null,
+        wallet: null,
+        accountSummary: null,
+        sessions: null,
+    },
+    binance: {
+        executions: null,
+        trades: null,
+        orders: null,
+        wallet: null,
+        accountSummary: null,
+        sessions: null,
+    },
+};
+
+// ============ Clear Cache ============
+
+export function clearCache(exchange?: ExchangeType) {
+    const exchanges: ExchangeType[] = exchange ? [exchange] : ['bitmex', 'binance'];
+    for (const ex of exchanges) {
+        cacheStore[ex] = {
+            executions: null,
+            trades: null,
+            orders: null,
+            wallet: null,
+            accountSummary: null,
+            sessions: null,
+        };
+    }
+}
+
+// ============ Check if exchange data exists ============
+
+export function hasExchangeData(exchange: ExchangeType): boolean {
+    const prefix = getFilePrefix(exchange);
+    const csvPath = path.join(process.cwd(), `${prefix}executions.csv`);
+    return fs.existsSync(csvPath);
+}
 
 // ============ Loaders ============
 
-export function loadExecutionsFromCSV(): Execution[] {
-    if (cachedExecutions) return cachedExecutions;
+export function loadExecutionsFromCSV(exchange: ExchangeType = 'bitmex'): Execution[] {
+    if (cacheStore[exchange].executions) return cacheStore[exchange].executions!;
 
-    const csvPath = path.join(process.cwd(), 'bitmex_executions.csv');
+    const prefix = getFilePrefix(exchange);
+    const csvPath = path.join(process.cwd(), `${prefix}executions.csv`);
     if (!fs.existsSync(csvPath)) {
-        throw new Error('bitmex_executions.csv not found');
+        console.warn(`${prefix}executions.csv not found`);
+        return [];
     }
 
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const records = parse(fileContent, { columns: true, skip_empty_lines: true, relax_quotes: true });
 
-    cachedExecutions = records.map((record: any) => ({
+    cacheStore[exchange].executions = records.map((record: any) => ({
         execID: record.execID,
         orderID: record.orderID || '',
         symbol: record.symbol,
@@ -56,14 +108,14 @@ export function loadExecutionsFromCSV(): Execution[] {
         text: record.text || '',
     }));
 
-    return cachedExecutions!;
+    return cacheStore[exchange].executions!;
 }
 
 // Load trades aggregated by OrderID (combine partial fills into single trades)
-export function loadTradesFromCSV(): Trade[] {
-    if (cachedTrades) return cachedTrades;
+export function loadTradesFromCSV(exchange: ExchangeType = 'bitmex'): Trade[] {
+    if (cacheStore[exchange].trades) return cacheStore[exchange].trades!;
 
-    const executions = loadExecutionsFromCSV();
+    const executions = loadExecutionsFromCSV(exchange);
     
     // Filter only actual trades
     const tradeExecutions = executions.filter(e => 
@@ -81,7 +133,7 @@ export function loadTradesFromCSV(): Trade[] {
     });
     
     // Aggregate each order's executions into a single trade
-    cachedTrades = Array.from(orderGroups.entries()).map(([orderID, execs]) => {
+    cacheStore[exchange].trades = Array.from(orderGroups.entries()).map(([orderID, execs]) => {
         // Sort by timestamp to get the first execution time
         execs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
@@ -94,6 +146,9 @@ export function loadTradesFromCSV(): Trade[] {
         const weightedPriceSum = execs.reduce((sum, e) => sum + (e.lastPx * e.lastQty), 0);
         const avgPrice = totalQty > 0 ? weightedPriceSum / totalQty : firstExec.lastPx;
         
+        // Determine fee currency based on exchange
+        const feeCurrency = exchange === 'binance' ? 'USDT' : 'XBT';
+        
         return {
             id: orderID, // Use orderID as the trade ID
             datetime: firstExec.timestamp,
@@ -105,7 +160,7 @@ export function loadTradesFromCSV(): Trade[] {
             cost: totalCost,
             fee: {
                 cost: totalFee,
-                currency: 'XBT',
+                currency: feeCurrency,
             },
             orderID: orderID,
             execType: firstExec.execType,
@@ -114,24 +169,25 @@ export function loadTradesFromCSV(): Trade[] {
     });
     
     // Sort by datetime
-    cachedTrades.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
+    cacheStore[exchange].trades!.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime());
 
-    return cachedTrades!;
+    return cacheStore[exchange].trades!;
 }
 
-export function loadOrdersFromCSV(): Order[] {
-    if (cachedOrders) return cachedOrders;
+export function loadOrdersFromCSV(exchange: ExchangeType = 'bitmex'): Order[] {
+    if (cacheStore[exchange].orders) return cacheStore[exchange].orders!;
 
-    const csvPath = path.join(process.cwd(), 'bitmex_orders.csv');
+    const prefix = getFilePrefix(exchange);
+    const csvPath = path.join(process.cwd(), `${prefix}orders.csv`);
     if (!fs.existsSync(csvPath)) {
-        console.warn('bitmex_orders.csv not found');
+        console.warn(`${prefix}orders.csv not found`);
         return [];
     }
 
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const records = parse(fileContent, { columns: true, skip_empty_lines: true, relax_quotes: true });
 
-    cachedOrders = records.map((record: any) => ({
+    cacheStore[exchange].orders = records.map((record: any) => ({
         orderID: record.orderID,
         symbol: record.symbol,
         displaySymbol: formatSymbol(record.symbol),
@@ -147,24 +203,25 @@ export function loadOrdersFromCSV(): Order[] {
         text: record.text,
     }));
 
-    return cachedOrders!;
+    return cacheStore[exchange].orders!;
 }
 
-export function loadWalletHistoryFromCSV(): WalletTransaction[] {
-    if (cachedWallet) return cachedWallet;
+export function loadWalletHistoryFromCSV(exchange: ExchangeType = 'bitmex'): WalletTransaction[] {
+    if (cacheStore[exchange].wallet) return cacheStore[exchange].wallet!;
 
-    const csvPath = path.join(process.cwd(), 'bitmex_wallet_history.csv');
+    const prefix = getFilePrefix(exchange);
+    const csvPath = path.join(process.cwd(), `${prefix}wallet_history.csv`);
     if (!fs.existsSync(csvPath)) {
-        console.warn('bitmex_wallet_history.csv not found');
+        console.warn(`${prefix}wallet_history.csv not found`);
         return [];
     }
 
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const records = parse(fileContent, { columns: true, skip_empty_lines: true, relax_quotes: true });
 
-    cachedWallet = records.map((record: any) => ({
+    cacheStore[exchange].wallet = records.map((record: any) => ({
         transactID: record.transactID,
-        account: parseInt(record.account),
+        account: parseInt(record.account) || record.account,
         currency: record.currency,
         transactType: record.transactType as WalletTransaction['transactType'],
         amount: parseFloat(record.amount) || 0,
@@ -178,22 +235,23 @@ export function loadWalletHistoryFromCSV(): WalletTransaction[] {
         marginBalance: record.marginBalance ? parseFloat(record.marginBalance) : null,
     }));
 
-    return cachedWallet!;
+    return cacheStore[exchange].wallet!;
 }
 
-export function loadAccountSummary(): AccountSummary | null {
-    if (cachedAccountSummary) return cachedAccountSummary;
+export function loadAccountSummary(exchange: ExchangeType = 'bitmex'): AccountSummary | null {
+    if (cacheStore[exchange].accountSummary) return cacheStore[exchange].accountSummary;
 
-    const jsonPath = path.join(process.cwd(), 'bitmex_account_summary.json');
+    const prefix = getFilePrefix(exchange);
+    const jsonPath = path.join(process.cwd(), `${prefix}account_summary.json`);
     if (!fs.existsSync(jsonPath)) {
-        console.warn('bitmex_account_summary.json not found');
+        console.warn(`${prefix}account_summary.json not found`);
         return null;
     }
 
     const fileContent = fs.readFileSync(jsonPath, 'utf-8');
     const data = JSON.parse(fileContent);
     
-    cachedAccountSummary = {
+    cacheStore[exchange].accountSummary = {
         ...data,
         positions: data.positions.map((p: any) => ({
             ...p,
@@ -201,31 +259,31 @@ export function loadAccountSummary(): AccountSummary | null {
         })),
     };
     
-    return cachedAccountSummary;
+    return cacheStore[exchange].accountSummary;
 }
 
 // ============ Position Session Calculator (Server-side) ============
 
 import { calculatePositionSessionsFromExecutions } from './position_calculator';
 
-export function getPositionSessions(): PositionSession[] {
-    if (cachedSessions) return cachedSessions;
+export function getPositionSessions(exchange: ExchangeType = 'bitmex'): PositionSession[] {
+    if (cacheStore[exchange].sessions) return cacheStore[exchange].sessions!;
     
     // Use executions directly for more accurate position tracking
-    const executions = loadExecutionsFromCSV();
-    cachedSessions = calculatePositionSessionsFromExecutions(executions);
+    const executions = loadExecutionsFromCSV(exchange);
+    cacheStore[exchange].sessions = calculatePositionSessionsFromExecutions(executions, exchange);
     
-    console.log(`Calculated ${cachedSessions.length} position sessions from ${executions.length} executions`);
+    console.log(`[${exchange}] Calculated ${cacheStore[exchange].sessions!.length} position sessions from ${executions.length} executions`);
     
-    return cachedSessions;
+    return cacheStore[exchange].sessions!;
 }
 
 // ============ Analytics ============
 
-export function calculateTradingStats(): TradingStats {
-    const trades = loadTradesFromCSV();
-    const orders = loadOrdersFromCSV();
-    const wallet = loadWalletHistoryFromCSV();
+export function calculateTradingStats(exchange: ExchangeType = 'bitmex'): TradingStats {
+    const trades = loadTradesFromCSV(exchange);
+    const orders = loadOrdersFromCSV(exchange);
+    const wallet = loadWalletHistoryFromCSV(exchange);
     
     const filledOrders = orders.filter(o => o.ordStatus === 'Filled').length;
     const canceledOrders = orders.filter(o => o.ordStatus === 'Canceled').length;
@@ -237,18 +295,24 @@ export function calculateTradingStats(): TradingStats {
     
     const SAT_TO_BTC = 100000000;
     
-    const realizedPnlTxs = wallet.filter(w => w.transactType === 'RealisedPNL' && w.transactStatus === 'Completed');
+    // For Binance, the amounts are already in USDT * SAT_TO_BTC
+    const realizedPnlTxs = wallet.filter(w => 
+        (w.transactType === 'RealisedPNL' || w.transactType === 'Funding') && 
+        w.transactStatus === 'Completed'
+    );
     const fundingTxs = wallet.filter(w => w.transactType === 'Funding' && w.transactStatus === 'Completed');
     
-    const totalRealizedPnl = realizedPnlTxs.reduce((sum, w) => sum + w.amount, 0) / SAT_TO_BTC;
+    const totalRealizedPnl = realizedPnlTxs
+        .filter(w => w.transactType === 'RealisedPNL')
+        .reduce((sum, w) => sum + w.amount, 0) / SAT_TO_BTC;
     const totalFees = realizedPnlTxs.reduce((sum, w) => sum + Math.abs(w.fee), 0) / SAT_TO_BTC;
     
     const totalFunding = fundingTxs.reduce((sum, w) => sum + w.amount, 0) / SAT_TO_BTC;
     const fundingPaid = fundingTxs.filter(w => w.amount < 0).reduce((sum, w) => sum + Math.abs(w.amount), 0) / SAT_TO_BTC;
     const fundingReceived = fundingTxs.filter(w => w.amount > 0).reduce((sum, w) => sum + w.amount, 0) / SAT_TO_BTC;
     
-    const winningTxs = realizedPnlTxs.filter(w => w.amount > 0);
-    const losingTxs = realizedPnlTxs.filter(w => w.amount < 0);
+    const winningTxs = realizedPnlTxs.filter(w => w.amount > 0 && w.transactType === 'RealisedPNL');
+    const losingTxs = realizedPnlTxs.filter(w => w.amount < 0 && w.transactType === 'RealisedPNL');
     
     const totalWins = winningTxs.reduce((sum, w) => sum + w.amount, 0) / SAT_TO_BTC;
     const totalLosses = Math.abs(losingTxs.reduce((sum, w) => sum + w.amount, 0)) / SAT_TO_BTC;
@@ -258,7 +322,7 @@ export function calculateTradingStats(): TradingStats {
     
     const monthlyData = new Map<string, { pnl: number; funding: number; trades: number }>();
     
-    realizedPnlTxs.forEach(w => {
+    realizedPnlTxs.filter(w => w.transactType === 'RealisedPNL').forEach(w => {
         const month = w.timestamp.substring(0, 7);
         if (!monthlyData.has(month)) {
             monthlyData.set(month, { pnl: 0, funding: 0, trades: 0 });
@@ -317,8 +381,8 @@ export function calculateTradingStats(): TradingStats {
     };
 }
 
-export function getPaginatedTrades(page: number, limit: number, symbol?: string): { trades: Trade[], total: number } {
-    const allTrades = loadTradesFromCSV();
+export function getPaginatedTrades(page: number, limit: number, symbol?: string, exchange: ExchangeType = 'bitmex'): { trades: Trade[], total: number } {
+    const allTrades = loadTradesFromCSV(exchange);
     
     let filtered = allTrades;
     if (symbol) {
@@ -337,8 +401,8 @@ export function getPaginatedTrades(page: number, limit: number, symbol?: string)
     };
 }
 
-export function getOHLCData(symbol: string = 'BTCUSD', timeframe: '1h' | '4h' | '1d' | '1w' = '1d') {
-    const allTrades = loadTradesFromCSV();
+export function getOHLCData(symbol: string = 'BTCUSD', timeframe: '1h' | '4h' | '1d' | '1w' = '1d', exchange: ExchangeType = 'bitmex') {
+    const allTrades = loadTradesFromCSV(exchange);
     
     const internalSymbol = toInternalSymbol(symbol);
     const filtered = allTrades.filter(t => 
@@ -430,8 +494,8 @@ export function getOHLCData(symbol: string = 'BTCUSD', timeframe: '1h' | '4h' | 
     return { candles: candleArray, markers };
 }
 
-export function getEquityCurve(): { time: number; balance: number }[] {
-    const wallet = loadWalletHistoryFromCSV();
+export function getEquityCurve(exchange: ExchangeType = 'bitmex'): { time: number; balance: number }[] {
+    const wallet = loadWalletHistoryFromCSV(exchange);
     
     const balanceHistory = wallet
         .filter(w => w.transactStatus === 'Completed' && w.walletBalance > 0)
@@ -452,8 +516,8 @@ export function getEquityCurve(): { time: number; balance: number }[] {
         .sort((a, b) => a.time - b.time);
 }
 
-export function getFundingHistory(): { time: number; amount: number; cumulative: number }[] {
-    const wallet = loadWalletHistoryFromCSV();
+export function getFundingHistory(exchange: ExchangeType = 'bitmex'): { time: number; amount: number; cumulative: number }[] {
+    const wallet = loadWalletHistoryFromCSV(exchange);
     const SAT_TO_BTC = 100000000;
     
     const fundingTxs = wallet

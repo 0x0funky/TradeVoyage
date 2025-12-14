@@ -12,11 +12,13 @@ interface MonthlyData {
 
 interface MonthlyPnLChartProps {
     data: MonthlyData[];
+    exchange?: 'bitmex' | 'binance';
 }
 
-export function MonthlyPnLChart({ data }: MonthlyPnLChartProps) {
+export function MonthlyPnLChart({ data, exchange = 'bitmex' }: MonthlyPnLChartProps) {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
+    const currencyUnit = exchange === 'binance' ? 'USDT' : 'BTC';
 
     useEffect(() => {
         if (!chartContainerRef.current || data.length === 0) return;
@@ -48,7 +50,7 @@ export function MonthlyPnLChart({ data }: MonthlyPnLChartProps) {
             color: '#10b981',
             priceFormat: {
                 type: 'custom',
-                formatter: (price: number) => price.toFixed(4) + ' BTC',
+                formatter: (price: number) => price.toFixed(4) + ' ' + currencyUnit,
             },
         });
 
@@ -97,7 +99,7 @@ export function MonthlyPnLChart({ data }: MonthlyPnLChartProps) {
                 </div>
                 <div className="text-right">
                     <p className={`text-xl font-bold ${totalPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(4)} BTC
+                        {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(4)} {currencyUnit}
                     </p>
                     <p className="text-xs text-muted-foreground">
                         {profitableMonths}/{data.length} profitable months ({((profitableMonths / data.length) * 100).toFixed(0)}%)

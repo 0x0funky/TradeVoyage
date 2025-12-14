@@ -59,6 +59,7 @@ interface AccountSummary {
 interface StatsOverviewProps {
     stats: TradingStats;
     account: AccountSummary | null;
+    exchange?: 'bitmex' | 'binance';
 }
 
 function StatCard({
@@ -112,8 +113,9 @@ function StatCard({
     );
 }
 
-export function StatsOverview({ stats, account }: StatsOverviewProps) {
+export function StatsOverview({ stats, account, exchange = 'bitmex' }: StatsOverviewProps) {
     const currentPosition = account?.positions?.[0];
+    const currencyUnit = exchange === 'binance' ? 'USDT' : 'BTC';
 
     return (
         <div className="space-y-6">
@@ -129,22 +131,22 @@ export function StatsOverview({ stats, account }: StatsOverviewProps) {
                                 </p>
                                 <div className="flex items-baseline gap-2">
                                     <p className="text-4xl font-bold tracking-tight text-white">{account.wallet.marginBalance.toFixed(4)}</p>
-                                    <span className="text-xl font-medium text-white/60">BTC</span>
+                                    <span className="text-xl font-medium text-white/60">{currencyUnit}</span>
                                 </div>
                                 <div className="flex items-center gap-4 mt-3">
                                     <p className="text-sm text-blue-200/60 font-medium">
-                                        Available: <span className="text-blue-100">{account.wallet.availableMargin.toFixed(4)} BTC</span>
+                                        Available: <span className="text-blue-100">{account.wallet.availableMargin.toFixed(4)} {currencyUnit}</span>
                                     </p>
                                 </div>
                             </div>
                             <div className={`px-5 py-3 rounded-xl backdrop-blur-md border border-white/5 ${account.wallet.unrealisedPnl >= 0
-                                    ? 'bg-emerald-500/10 text-emerald-200'
-                                    : 'bg-rose-500/10 text-rose-200'
+                                ? 'bg-emerald-500/10 text-emerald-200'
+                                : 'bg-rose-500/10 text-rose-200'
                                 }`}>
                                 <p className="text-xs font-bold opacity-70 mb-1 uppercase tracking-wider">Unrealized PnL</p>
                                 <p className="text-xl font-bold flex items-center gap-2">
                                     {account.wallet.unrealisedPnl >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                                    {account.wallet.unrealisedPnl >= 0 ? '+' : ''}{account.wallet.unrealisedPnl.toFixed(6)} BTC
+                                    {account.wallet.unrealisedPnl >= 0 ? '+' : ''}{account.wallet.unrealisedPnl.toFixed(6)} {currencyUnit}
                                 </p>
                             </div>
                         </div>
@@ -193,14 +195,14 @@ export function StatsOverview({ stats, account }: StatsOverviewProps) {
                     <StatCard
                         icon={DollarSign}
                         label="Total Realized PnL"
-                        value={`${stats.totalRealizedPnl >= 0 ? '+' : ''}${stats.totalRealizedPnl.toFixed(4)} BTC`}
+                        value={`${stats.totalRealizedPnl >= 0 ? '+' : ''}${stats.totalRealizedPnl.toFixed(4)} ${currencyUnit}`}
                         color={stats.totalRealizedPnl >= 0 ? 'green' : 'red'}
                         trend={stats.totalRealizedPnl >= 0 ? 'up' : 'down'}
                     />
                     <StatCard
                         icon={Zap}
                         label="Net Funding"
-                        value={`${stats.totalFunding >= 0 ? '+' : ''}${stats.totalFunding.toFixed(4)} BTC`}
+                        value={`${stats.totalFunding >= 0 ? '+' : ''}${stats.totalFunding.toFixed(4)} ${currencyUnit}`}
                         subValue={`Paid: ${stats.fundingPaid.toFixed(4)} | Rcvd: ${stats.fundingReceived.toFixed(4)}`}
                         color={stats.totalFunding >= 0 ? 'green' : 'amber'}
                     />
@@ -252,7 +254,7 @@ export function StatsOverview({ stats, account }: StatsOverviewProps) {
                         <StatCard
                             icon={Wallet}
                             label="Total Fees"
-                            value={`${stats.totalFees.toFixed(4)} BTC`}
+                            value={`${stats.totalFees.toFixed(4)} ${currencyUnit}`}
                             color="amber"
                         />
                     </div>

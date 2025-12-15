@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TradeVoyage - Crypto Trading Analytics",
   description: "Your crypto trading journey - Analytics dashboard with AI insights",
+  icons: {
+    icon: "/logo_64.ico",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

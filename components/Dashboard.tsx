@@ -280,9 +280,16 @@ export function Dashboard() {
                 {/* Header */}
                 <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-border">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-                            TradeVoyage
-                        </h1>
+                        <div className="flex items-center gap-3">
+                            <img
+                                src="/logo-gradient.png"
+                                alt="TradeVoyage Logo"
+                                className="w-10 h-10 rounded-xl"
+                            />
+                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                                TradeVoyage
+                            </h1>
+                        </div>
                         {/* Social Links */}
                         <div className="flex items-center gap-2 mt-2">
                             <a

@@ -122,7 +122,7 @@ function StatCard({
 
 export function StatsOverview({ stats, account, exchange = 'bitmex' }: StatsOverviewProps) {
     const currentPosition = account?.positions?.[0];
-    const currencyUnit = exchange === 'binance' ? 'USDT' : 'BTC';
+    const currencyUnit = (exchange === 'binance' || exchange === 'okx') ? 'USDT' : 'BTC';
 
     return (
         <div className="space-y-6">

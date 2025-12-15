@@ -16,7 +16,10 @@ import {
 import {
     AIProvider,
     AISettings,
+    AIModel,
     AI_PROVIDER_NAMES,
+    AI_MODELS,
+    DEFAULT_MODELS,
     loadAISettings,
     getApiKeyForProvider,
     hasConfiguredProvider,
@@ -34,6 +37,7 @@ interface AIAnalysisProps {
 export function AIAnalysis({ stats, sessions, exchange }: AIAnalysisProps) {
     const [settings, setSettings] = useState<AISettings | null>(null);
     const [selectedProvider, setSelectedProvider] = useState<AIProvider>('openai');
+    const [selectedModel, setSelectedModel] = useState<AIModel>('gpt-5.2');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<string | null>(null);
     const [analysisTime, setAnalysisTime] = useState<string | null>(null);
@@ -46,6 +50,7 @@ export function AIAnalysis({ stats, sessions, exchange }: AIAnalysisProps) {
         const loaded = loadAISettings();
         setSettings(loaded);
         setSelectedProvider(loaded.selectedProvider);
+        setSelectedModel(loaded.selectedModel || DEFAULT_MODELS[loaded.selectedProvider]);
 
         // Clear previous analysis state first when exchange changes
         setAnalysis(null);
@@ -136,6 +141,7 @@ export function AIAnalysis({ stats, sessions, exchange }: AIAnalysisProps) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     provider: selectedProvider,
+                    model: selectedModel,
                     apiKey,
                     systemPrompt: settings.systemPrompt,
                     tradingData,
@@ -212,20 +218,42 @@ export function AIAnalysis({ stats, sessions, exchange }: AIAnalysisProps) {
             {/* Provider Selection & Controls */}
             <div className="glass rounded-xl p-6 border border-white/10">
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                         <div>
                             <label className="block text-sm font-medium text-muted-foreground mb-1">
                                 AI Provider
                             </label>
                             <select
                                 value={selectedProvider}
-                                onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+                                onChange={(e) => {
+                                    const newProvider = e.target.value as AIProvider;
+                                    setSelectedProvider(newProvider);
+                                    setSelectedModel(DEFAULT_MODELS[newProvider]);
+                                }}
                                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-foreground focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
                                 disabled={isAnalyzing}
                             >
-                                <option value="openai">OpenAI GPT-4</option>
+                                <option value="openai">OpenAI</option>
                                 <option value="claude">Anthropic Claude</option>
                                 <option value="gemini">Google Gemini</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-muted-foreground mb-1">
+                                Model
+                            </label>
+                            <select
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value as AIModel)}
+                                className="bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-foreground focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors min-w-[180px]"
+                                disabled={isAnalyzing}
+                            >
+                                {AI_MODELS[selectedProvider].map(model => (
+                                    <option key={model.id} value={model.id}>
+                                        {model.name}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 

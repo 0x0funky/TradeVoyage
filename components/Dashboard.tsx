@@ -321,8 +321,34 @@ export function Dashboard() {
                                 <option value="okx">OKX</option>
                                 <option value="bybit">Bybit</option>
                             </select>
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground">
-                                <Database className="w-4 h-4" />
+                            {/* Dynamic Exchange Icons */}
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                {selectedExchange === 'bitmex' && (
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#F7931A" />
+                                        <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#F7931A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                )}
+                                {selectedExchange === 'binance' && (
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="#F3BA2F">
+                                        <path d="M12 4.5l-2.5 2.5L12 9.5l2.5-2.5L12 4.5zm-5.5 5.5L4 12.5l2.5 2.5L9 12.5 6.5 10zm11 0L15 12.5l2.5 2.5 2.5-2.5-2.5-2.5zM12 14.5l-2.5 2.5L12 19.5l2.5-2.5L12 14.5z" />
+                                    </svg>
+                                )}
+                                {selectedExchange === 'okx' && (
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="4" y="4" width="6" height="6" rx="1" fill="currentColor" />
+                                        <rect x="14" y="4" width="6" height="6" rx="1" fill="currentColor" />
+                                        <rect x="4" y="14" width="6" height="6" rx="1" fill="currentColor" />
+                                        <rect x="14" y="14" width="6" height="6" rx="1" fill="currentColor" />
+                                    </svg>
+                                )}
+                                {selectedExchange === 'bybit' && (
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <path d="M5 6h6v12H5V6z" fill="#F7A600" />
+                                        <path d="M13 6h6v6h-6V6z" fill="#F7A600" />
+                                        <path d="M13 14h6v4h-6v-4z" fill="#F7A600" />
+                                    </svg>
+                                )}
                             </div>
                             <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-muted-foreground">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>

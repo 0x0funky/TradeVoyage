@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AIAnalysisRequest, AIAnalysisResponse, TradingDataForAI } from '@/lib/ai_types';
+import { AIAnalysisRequest, AIAnalysisResponse, TradingDataForAI, AIModel } from '@/lib/ai_types';
 
 export async function POST(request: NextRequest): Promise<NextResponse<AIAnalysisResponse>> {
     try {
-        const body: AIAnalysisRequest = await request.json();
-        const { provider, apiKey, systemPrompt, tradingData } = body;
+        const body: AIAnalysisRequest & { model?: AIModel } = await request.json();
+        const { provider, apiKey, systemPrompt, tradingData, model } = body;
 
         if (!apiKey) {
             return NextResponse.json({ success: false, error: 'API key is required' });
@@ -17,13 +17,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<AIAnalysi
 
         switch (provider) {
             case 'openai':
-                analysis = await callOpenAI(apiKey, systemPrompt, userMessage);
+                analysis = await callOpenAI(apiKey, systemPrompt, userMessage, model || 'gpt-4o');
                 break;
             case 'claude':
-                analysis = await callClaude(apiKey, systemPrompt, userMessage);
+                analysis = await callClaude(apiKey, systemPrompt, userMessage, model || 'claude-sonnet-4-20250514');
                 break;
             case 'gemini':
-                analysis = await callGemini(apiKey, systemPrompt, userMessage);
+                analysis = await callGemini(apiKey, systemPrompt, userMessage, model || 'gemini-2.0-flash');
                 break;
             default:
                 return NextResponse.json({ success: false, error: 'Unknown provider' });
@@ -86,7 +86,13 @@ ${exchange.toUpperCase()}
 
 // ============ OpenAI API ============
 
-async function callOpenAI(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
+async function callOpenAI(apiKey: string, systemPrompt: string, userMessage: string, model: string): Promise<string> {
+    // GPT-5+ models use max_completion_tokens instead of max_tokens
+    const isNewModel = model.startsWith('gpt-5') || model.startsWith('o1') || model.startsWith('o3');
+    const tokenParam = isNewModel
+        ? { max_completion_tokens: 4000 }
+        : { max_tokens: 2000 };
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -94,13 +100,13 @@ async function callOpenAI(apiKey: string, systemPrompt: string, userMessage: str
             'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            model: 'gpt-4o',
+            model: model,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userMessage },
             ],
             temperature: 0.7,
-            max_tokens: 2000,
+            ...tokenParam,
         }),
     });
 
@@ -115,7 +121,7 @@ async function callOpenAI(apiKey: string, systemPrompt: string, userMessage: str
 
 // ============ Claude API ============
 
-async function callClaude(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
+async function callClaude(apiKey: string, systemPrompt: string, userMessage: string, model: string): Promise<string> {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -124,7 +130,7 @@ async function callClaude(apiKey: string, systemPrompt: string, userMessage: str
             'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
+            model: model,
             max_tokens: 2000,
             system: systemPrompt,
             messages: [
@@ -144,8 +150,8 @@ async function callClaude(apiKey: string, systemPrompt: string, userMessage: str
 
 // ============ Gemini API ============
 
-async function callGemini(apiKey: string, systemPrompt: string, userMessage: string): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, model: string): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
         method: 'POST',

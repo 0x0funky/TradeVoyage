@@ -26,7 +26,10 @@ import { ExchangeType, EXCHANGE_DISPLAY_NAMES } from '@/lib/exchange_types';
 import {
     AISettings,
     AIProvider,
+    AIModel,
     AI_PROVIDER_NAMES,
+    AI_MODELS,
+    DEFAULT_MODELS,
     DEFAULT_SYSTEM_PROMPT,
     loadAISettings,
     saveAISettings,
@@ -865,22 +868,63 @@ export default function SettingsPage() {
                             />
                         </section>
 
-                        {/* Default Provider */}
+                        {/* Provider & Model Selection */}
                         <section className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
                             <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                                 <Sparkles className="w-5 h-5 text-purple-400" />
-                                Default Provider
+                                Model Selection
                             </h2>
-                            <select
-                                value={aiSettings.selectedProvider}
-                                onChange={(e) => setAiSettings({ ...aiSettings, selectedProvider: e.target.value as AIProvider })}
-                                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
-                            >
-                                <option value="openai">OpenAI GPT-4</option>
-                                <option value="claude">Anthropic Claude</option>
-                                <option value="gemini">Google Gemini</option>
-                            </select>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {/* Provider Selector */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                        AI Provider
+                                    </label>
+                                    <select
+                                        value={aiSettings.selectedProvider}
+                                        onChange={(e) => {
+                                            const newProvider = e.target.value as AIProvider;
+                                            setAiSettings({
+                                                ...aiSettings,
+                                                selectedProvider: newProvider,
+                                                selectedModel: DEFAULT_MODELS[newProvider]
+                                            });
+                                        }}
+                                        className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+                                    >
+                                        <option value="openai">OpenAI</option>
+                                        <option value="claude">Anthropic Claude</option>
+                                        <option value="gemini">Google Gemini</option>
+                                    </select>
+                                </div>
+
+                                {/* Model Selector */}
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                        Model
+                                    </label>
+                                    <select
+                                        value={aiSettings.selectedModel}
+                                        onChange={(e) => setAiSettings({ ...aiSettings, selectedModel: e.target.value as AIModel })}
+                                        className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500"
+                                    >
+                                        {AI_MODELS[aiSettings.selectedProvider].map(model => (
+                                            <option key={model.id} value={model.id}>
+                                                {model.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Model Description */}
+                            <div className="mt-4 p-3 bg-zinc-800/50 rounded-lg">
+                                <p className="text-sm text-zinc-400">
+                                    {AI_MODELS[aiSettings.selectedProvider].find(m => m.id === aiSettings.selectedModel)?.description || ''}
+                                </p>
+                            </div>
                         </section>
+
 
                         {/* Save Button */}
                         <div className="flex items-center gap-4">

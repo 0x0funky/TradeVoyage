@@ -8,7 +8,7 @@
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss)
 ![AI Powered](https://img.shields.io/badge/AI_Powered-GPT5%20%7C%20Claude%20%7C%20Gemini-blueviolet)
 
-**TradeVoyage** - 您的加密貨幣交易旅程分析平台。整合多家中心化交易所（CEX），透過視覺化圖表與詳細統計數據，深入了解您的交易策略與倉位管理。支援 **GPT-5.2、Claude Sonnet 4、Gemini 3 Pro** 等 21 款最新 AI 模型。
+**TradeVoyage** - 您的加密貨幣交易旅程分析平台。整合多家中心化交易所（CEX），透過視覺化圖表與詳細統計數據，深入了解您的交易策略與倉位管理。支援 **GPT-5.2、Claude Sonnet 4、Gemini 3 Pro** 等 22 款最新 AI 模型。
 
 [English Version](README_EN.md)
 
@@ -16,7 +16,7 @@
 
 - **多交易所支援** - 支援 BitMEX、Binance Futures、OKX、Bybit 等多家交易所
 - **Read-Only API 導入** - 直接在平台上使用唯讀 API 安全下載您的交易數據
-- **AI 交易分析** - 整合 21 款 AI 模型（GPT-5.2、Claude Sonnet 4、Gemini 3 Pro 等），智能分析您的交易表現
+- **AI 交易分析** - 整合 22 款 AI 模型（GPT-5.2、Claude Sonnet 4、Gemini 3 Pro 等），智能分析您的交易表現
 - **優化倉位計算** - 更精準的倉位開平邏輯與 PnL 計算
 - **優化圖表顯示** - 改進 K 線圖與交易標記顯示效果
 - **深色/淺色模式** - 支援主題切換，保護您的眼睛
@@ -273,7 +273,7 @@ npm run lint
 
 TradeVoyage 整合了多個 AI 模型，可智能分析您的交易表現並提供改進建議：
 
-### 支援的 AI 模型（共 21 款）
+### 支援的 AI 模型（共 22 款）
 
 #### OpenAI（9 款）
 | 模型 | API 名稱 | 特點 |
@@ -297,10 +297,11 @@ TradeVoyage 整合了多個 AI 模型，可智能分析您的交易表現並提�
 | Claude 3.5 Haiku | `claude-3-5-haiku-20241022` | 最快速 - 即時回應 |
 | Claude 3 Opus | `claude-3-opus-20240229` | 舊版旗艦 |
 
-#### Google Gemini（7 款）
+#### Google Gemini（8 款）
 | 模型 | API 名稱 | 特點 |
 |------|----------|------|
-| **Gemini 3 Pro** | `gemini-3-pro` | 最新 - 高精度多模態推理 |
+| **Gemini 3 Pro** | `gemini-3-pro-preview` | 最新 - 高精度多模態推理 (Preview) |
+| **Gemini 3 Flash** | `gemini-3-flash-preview` | 最新快速 - 視覺與代理推理 (Preview) |
 | Gemini 2.5 Pro | `gemini-2.5-pro` | 專業版 - 深度思考 |
 | Gemini 2.5 Flash | `gemini-2.5-flash` | 價效比最佳 - 自適應思考 |
 | Gemini 2.0 Flash | `gemini-2.0-flash` | 2倍速度提升 |

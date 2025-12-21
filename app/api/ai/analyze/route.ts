@@ -153,6 +153,22 @@ async function callClaude(apiKey: string, systemPrompt: string, userMessage: str
 async function callGemini(apiKey: string, systemPrompt: string, userMessage: string, model: string): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
+    // Check if this is a thinking model (2.5 Pro, 3 Pro, etc.)
+    const isThinkingModel = model.includes('2.5-pro') || model.includes('3-pro') || model.includes('2.5-flash');
+
+    // Build generation config - thinking models need special handling
+    const generationConfig: Record<string, unknown> = {
+        temperature: 0.7,
+        maxOutputTokens: 8192, // Increased from 2000 to prevent truncation
+    };
+
+    // For thinking models, configure thinking budget
+    if (isThinkingModel) {
+        generationConfig.thinkingConfig = {
+            thinkingBudget: 2048, // Allow up to 2048 tokens for thinking
+        };
+    }
+
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -167,10 +183,7 @@ async function callGemini(apiKey: string, systemPrompt: string, userMessage: str
                     parts: [{ text: userMessage }]
                 }
             ],
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 2000,
-            },
+            generationConfig,
         }),
     });
 
@@ -180,5 +193,29 @@ async function callGemini(apiKey: string, systemPrompt: string, userMessage: str
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini';
+
+    // Extract response text - thinking models may have multiple parts
+    // The actual response (not the thinking) is usually the last text part without "thought" flag
+    const candidate = data.candidates?.[0];
+    if (!candidate?.content?.parts) {
+        return 'No response from Gemini';
+    }
+
+    // For thinking models, iterate through parts to find the final text response
+    // Thinking parts have a "thought" property set to true
+    const parts = candidate.content.parts;
+    let responseText = '';
+
+    for (const part of parts) {
+        // Skip thinking parts (they have thought: true)
+        if (part.thought === true) {
+            continue;
+        }
+        // Accumulate text from non-thinking parts
+        if (part.text) {
+            responseText += part.text;
+        }
+    }
+
+    return responseText || 'No response from Gemini';
 }

@@ -2,6 +2,9 @@
 
 export type ExchangeType = 'bitmex' | 'binance' | 'okx' | 'bybit';
 
+// Array of all supported exchanges for iteration
+export const EXCHANGES: ExchangeType[] = ['bitmex', 'binance', 'okx', 'bybit'];
+
 export interface ExchangeConfig {
     exchange: ExchangeType;
     apiKey: string;

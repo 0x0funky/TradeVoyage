@@ -41,13 +41,17 @@ export function Dashboard() {
     const [equityCurve, setEquityCurve] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('bitmex');
+    const [selectedExchange, setSelectedExchange] = useState<ExchangeType | null>(null);
     const [selectedSymbol, setSelectedSymbol] = useState('BTCUSD');
     const [viewMode, setViewMode] = useState<ViewMode>('overview');
     const [selectedSession, setSelectedSession] = useState<PositionSession | null>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const limit = 20;
+
+    // State for available exchanges (auto-detected based on data)
+    const [availableExchanges, setAvailableExchanges] = useState<ExchangeType[]>([]);
+    const [checkingData, setCheckingData] = useState(true);
 
     // State for all sessions (loaded upfront for chart markers)
     const [allSessions, setAllSessions] = useState<PositionSession[]>([]);
@@ -148,8 +152,40 @@ export function Dashboard() {
             ? ['BTC-USDT-SWAP', 'ETH-USDT-SWAP']
             : ['BTCUSDT', 'ETHUSDT'];
 
+    // Check available exchanges on mount
+    useEffect(() => {
+        async function checkAvailableExchanges() {
+            try {
+                const res = await fetch('/api/exchanges');
+                if (!res.ok) throw new Error('Failed to check exchanges');
+                const data = await res.json();
+                setAvailableExchanges(data.availableExchanges || []);
+
+                // Auto-select first available exchange
+                if (data.availableExchanges && data.availableExchanges.length > 0) {
+                    const firstExchange = data.availableExchanges[0];
+                    setSelectedExchange(firstExchange);
+                    // Set appropriate default symbol
+                    if (firstExchange === 'bitmex') {
+                        setSelectedSymbol('BTCUSD');
+                    } else if (firstExchange === 'okx') {
+                        setSelectedSymbol('BTC-USDT-SWAP');
+                    } else {
+                        setSelectedSymbol('BTCUSDT');
+                    }
+                }
+            } catch (err) {
+                console.error('Error checking available exchanges:', err);
+            } finally {
+                setCheckingData(false);
+            }
+        }
+        checkAvailableExchanges();
+    }, []);
+
     // Reset symbol when exchange changes
     useEffect(() => {
+        if (!selectedExchange) return;
         if (selectedExchange === 'bitmex') {
             setSelectedSymbol('BTCUSD');
         } else if (selectedExchange === 'okx') {
@@ -161,6 +197,7 @@ export function Dashboard() {
 
     // Load Stats and Account Data
     useEffect(() => {
+        if (!selectedExchange) return;
         async function loadStats() {
             try {
                 const res = await fetch(`/api/trades?type=stats&exchange=${selectedExchange}`);
@@ -177,6 +214,7 @@ export function Dashboard() {
 
     // Load Equity Curve
     useEffect(() => {
+        if (!selectedExchange) return;
         async function loadEquity() {
             try {
                 const res = await fetch(`/api/trades?type=equity&exchange=${selectedExchange}`);
@@ -193,6 +231,7 @@ export function Dashboard() {
 
     // Load all sessions upfront for chart markers
     useEffect(() => {
+        if (!selectedExchange) return;
         async function loadAllSessions() {
             try {
                 // Fetch all sessions for this exchange without pagination
@@ -209,6 +248,7 @@ export function Dashboard() {
 
     // Load Table Data (Paginated)
     useEffect(() => {
+        if (!selectedExchange) return;
         async function loadData() {
             if (viewMode === 'overview') {
                 setLoading(false);
@@ -256,6 +296,83 @@ export function Dashboard() {
             setSelectedSession(session);
         }
     };
+
+    if (checkingData) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+                <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground">Checking available data...</p>
+            </div>
+        );
+    }
+
+    // No data available - show onboarding screen
+    if (availableExchanges.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8">
+                <div className="max-w-md w-full text-center space-y-6">
+                    <div className="w-20 h-20 mx-auto">
+                        <img
+                            src="/logo-gradient.png"
+                            alt="TradeVoyage Logo"
+                            className="w-full h-full rounded-2xl"
+                        />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to TradeVoyage</h1>
+                        <p className="text-muted-foreground">
+                            No trading data found. Import your trading history from a supported exchange to get started.
+                        </p>
+                    </div>
+                    <div className="bg-secondary/50 rounded-xl p-4 border border-border">
+                        <h3 className="font-semibold text-foreground mb-3">Supported Exchanges</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-6 h-6 rounded bg-[#f7941d]/10 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+                                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#f7941d" />
+                                    </svg>
+                                </div>
+                                BitMEX
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-6 h-6 rounded bg-[#f0b90b]/10 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="#f0b90b">
+                                        <path d="M12 2L6 8.5L8.5 11L12 7.5L15.5 11L18 8.5L12 2Z" />
+                                    </svg>
+                                </div>
+                                Binance
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-6 h-6 rounded bg-white/10 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                        <rect x="4" y="4" width="5" height="5" rx="1" />
+                                        <rect x="14" y="4" width="5" height="5" rx="1" />
+                                    </svg>
+                                </div>
+                                OKX
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <div className="w-6 h-6 rounded bg-[#F7A600]/10 flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="#F7A600">
+                                        <path d="M5 6h6v12H5V6z" />
+                                    </svg>
+                                </div>
+                                Bybit
+                            </div>
+                        </div>
+                    </div>
+                    <Link
+                        href="/settings"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors"
+                    >
+                        <Settings className="w-5 h-5" />
+                        Import Trading Data
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     if (loading && !stats) {
         return (
@@ -316,17 +433,16 @@ export function Dashboard() {
                         {/* Exchange Selector */}
                         <div className="relative">
                             <select
-                                value={selectedExchange}
+                                value={selectedExchange || ''}
                                 onChange={(e) => {
                                     setSelectedExchange(e.target.value as ExchangeType);
                                     setPage(1);
                                 }}
                                 className="appearance-none pl-10 pr-10 py-2.5 bg-background border border-border rounded-xl text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-secondary cursor-pointer [&>option]:bg-background [&>option]:text-foreground"
                             >
-                                <option value="bitmex">BitMEX</option>
-                                <option value="binance">Binance</option>
-                                <option value="okx">OKX</option>
-                                <option value="bybit">Bybit</option>
+                                {availableExchanges.map(ex => (
+                                    <option key={ex} value={ex}>{EXCHANGE_DISPLAY_NAMES[ex]}</option>
+                                ))}
                             </select>
                             {/* Dynamic Exchange Icons */}
                             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -478,7 +594,7 @@ export function Dashboard() {
                         </div>
                     )}
                     <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                        {EXCHANGE_DISPLAY_NAMES[selectedExchange]}
+                        {selectedExchange && EXCHANGE_DISPLAY_NAMES[selectedExchange]}
                         <span className="text-muted-foreground font-normal">•</span>
                         <span className="text-muted-foreground font-normal">
                             {account?.user?.username ? `@${account.user.username}` : 'Portfolio Analytics'}
@@ -489,7 +605,7 @@ export function Dashboard() {
                 {/* Overview Mode */}
                 {viewMode === 'overview' && stats && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <StatsOverview stats={stats} account={account} exchange={selectedExchange} />
+                        <StatsOverview stats={stats} account={account} exchange={selectedExchange!} />
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="glass rounded-xl p-6 hover-card">
@@ -497,14 +613,14 @@ export function Dashboard() {
                                     <TrendingUp className="w-5 h-5 text-primary" />
                                     Equity Curve
                                 </h3>
-                                <EquityCurve data={equityCurve} exchange={selectedExchange} />
+                                <EquityCurve data={equityCurve} exchange={selectedExchange!} />
                             </div>
                             <div className="glass rounded-xl p-6 hover-card">
                                 <h3 className="text-lg font-semibold mb-6 flex items-center gap-2 text-foreground">
                                     <BarChart3 className="w-5 h-5 text-primary" />
                                     Monthly PnL
                                 </h3>
-                                <MonthlyPnLChart data={stats.monthlyPnl} exchange={selectedExchange} />
+                                <MonthlyPnLChart data={stats.monthlyPnl} exchange={selectedExchange!} />
                             </div>
                         </div>
 
@@ -624,7 +740,7 @@ export function Dashboard() {
                         <AIAnalysis
                             stats={stats}
                             sessions={allSessions}
-                            exchange={selectedExchange}
+                            exchange={selectedExchange!}
                         />
                     </div>
                 )}

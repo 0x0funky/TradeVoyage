@@ -22,7 +22,8 @@ export type ClaudeModel =
     | 'claude-3-opus-20240229';
 
 export type GeminiModel =
-    | 'gemini-3-pro'
+    | 'gemini-3-pro-preview'
+    | 'gemini-3-flash-preview'
     | 'gemini-2.5-pro'
     | 'gemini-2.5-flash'
     | 'gemini-2.0-flash'
@@ -68,7 +69,8 @@ export const AI_MODELS: Record<AIProvider, { id: AIModel; name: string; descript
         { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', description: '舊版旗艦' },
     ],
     gemini: [
-        { id: 'gemini-3-pro', name: 'Gemini 3 Pro', description: '🔥 最新 - 高精度多模態推理' },
+        { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: '🔥 最新 - 高精度多模態推理 (Preview)' },
+        { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: '🔥 最新快速 - 視覺與代理推理 (Preview)' },
         { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: '專業版 - 深度思考' },
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: '價效比最佳 - 自適應思考' },
         { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: '2倍速度提升' },
@@ -82,7 +84,7 @@ export const AI_MODELS: Record<AIProvider, { id: AIModel; name: string; descript
 export const DEFAULT_MODELS: Record<AIProvider, AIModel> = {
     openai: 'gpt-5.2',
     claude: 'claude-sonnet-4-20250514',
-    gemini: 'gemini-3-pro',
+    gemini: 'gemini-3-pro-preview',
 };
 
 // ============ Default System Prompt ============
